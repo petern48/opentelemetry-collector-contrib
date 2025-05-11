@@ -30,7 +30,8 @@ import (
 type k8sobjectsreceiver struct {
 	setting         receiver.Settings
 	config          *Config
-	objects         []*K8sObjectsConfig
+	// objects         []*K8sObjectsConfig
+	objects         []*K8sObjectTarget
 	stopperChanList []chan struct{}
 	client          dynamic.Interface
 	consumer        consumer.Logs
@@ -51,13 +52,42 @@ func newReceiver(params receiver.Settings, config *Config, consumer consumer.Log
 		return nil, err
 	}
 
-	objects := make([]*K8sObjectsConfig, len(config.Objects))
+	// objects := make([]*K8sObjectsConfig, len(config.Objects))
+	objects := make([]*K8sObjectTarget, len(config.Objects))
 	for i, obj := range config.Objects {
-		objects[i] = obj.DeepCopy()
+		// objects[i] = obj.DeepCopy()
+		objects[i] = newTargetObject(obj)
 		objects[i].exclude = make(map[apiWatch.EventType]bool)
 		for _, item := range objects[i].ExcludeWatchType {
 			objects[i].exclude[item] = true
 		}
+	}
+
+	// Validate objects against K8s API
+	validObjects, err := config.getValidObjects()
+	if err != nil {
+		return nil, err
+	}
+
+	for i, object := range objects {
+		obj := config.Objects[i]
+		gvrs, ok := validObjects[obj.Name]
+		if !ok {
+			availableResource := make([]string, len(validObjects))
+			for k := range validObjects {
+				availableResource = append(availableResource, k)
+			}
+			return nil, fmt.Errorf("resource %v not found. Valid resources are: %v", obj.Name, availableResource)
+		}
+
+		gvr := gvrs[0]
+		for i := range gvrs {
+			if gvrs[i].Group == obj.Group {
+				gvr = gvrs[i]
+				break
+			}
+		}
+		object.gvr = gvr
 	}
 
 	return &k8sobjectsreceiver{
@@ -77,39 +107,42 @@ func (kr *k8sobjectsreceiver) Start(ctx context.Context, _ component.Host) error
 	}
 	kr.client = client
 
-	// Validate objects against K8s API
-	validObjects, err := kr.config.getValidObjects()
-	if err != nil {
-		return err
-	}
+	// // Validate objects against K8s API
+	// validObjects, err := kr.config.getValidObjects()
+	// if err != nil {
+	// 	return err
+	// }
 
-	for _, object := range kr.objects {
-		gvrs, ok := validObjects[object.Name]
-		if !ok {
-			availableResource := make([]string, len(validObjects))
-			for k := range validObjects {
-				availableResource = append(availableResource, k)
-			}
-			return fmt.Errorf("resource %v not found. Valid resources are: %v", object.Name, availableResource)
-		}
+	// for i, object := range kr.objects {
+	// 	obj := kr.config.Objects[i]
+	// 	gvrs, ok := validObjects[obj.Name]
+	// 	if !ok {
+	// 		availableResource := make([]string, len(validObjects))
+	// 		for k := range validObjects {
+	// 			availableResource = append(availableResource, k)
+	// 		}
+	// 		return fmt.Errorf("resource %v not found. Valid resources are: %v", obj.Name, availableResource)
+	// 	}
 
-		gvr := gvrs[0]
-		for i := range gvrs {
-			if gvrs[i].Group == object.Group {
-				gvr = gvrs[i]
-				break
-			}
-		}
-		object.gvr = gvr
-	}
+	// 	gvr := gvrs[0]
+	// 	for i := range gvrs {
+	// 		if gvrs[i].Group == obj.Group {
+	// 			gvr = gvrs[i]
+	// 			break
+	// 		}
+	// 	}
+	// 	object.gvr = gvr
+	// }
 
 	kr.setting.Logger.Info("Object Receiver started")
 
 	cctx, cancel := context.WithCancel(ctx)
 	kr.cancel = cancel
 
-	for _, object := range kr.objects {
-		kr.start(cctx, object)
+	// for _, object := range kr.objects {
+	for i, config := range kr.config.Objects {
+		// kr.start(cctx, object)
+		kr.start(cctx, config, kr.objects[i])
 	}
 	return nil
 }
@@ -128,39 +161,47 @@ func (kr *k8sobjectsreceiver) Shutdown(context.Context) error {
 	return nil
 }
 
-func (kr *k8sobjectsreceiver) start(ctx context.Context, object *K8sObjectsConfig) {
+func (kr *k8sobjectsreceiver) start(ctx context.Context, config *K8sObjectsConfig, object *K8sObjectTarget) {
+// func (kr *k8sobjectsreceiver) start(ctx context.Context, object *K8sObjectTarget) {
 	resource := kr.client.Resource(*object.gvr)
-	kr.setting.Logger.Info("Started collecting", zap.Any("gvr", object.gvr), zap.Any("mode", object.Mode), zap.Any("namespaces", object.Namespaces))
+	// kr.setting.Logger.Info("Started collecting", zap.Any("gvr", object.gvr), zap.Any("mode", object.Mode), zap.Any("namespaces", object.Namespaces))
+	kr.setting.Logger.Info("Started collecting", zap.Any("gvr", object.gvr), zap.Any("mode", config.Mode), zap.Any("namespaces", object.Namespaces))
 
-	switch object.Mode {
+	// switch object.Mode {
+	switch config.Mode {
 	case PullMode:
 		if len(object.Namespaces) == 0 {
-			go kr.startPull(ctx, object, resource)
+			// go kr.startPull(ctx, object, resource)
+			go kr.startPull(ctx, config, object, resource)
 		} else {
 			for _, ns := range object.Namespaces {
-				go kr.startPull(ctx, object, resource.Namespace(ns))
+				// go kr.startPull(ctx, object, resource.Namespace(ns))
+				go kr.startPull(ctx, config, object, resource.Namespace(ns))
 			}
 		}
 
 	case WatchMode:
 		if len(object.Namespaces) == 0 {
-			go kr.startWatch(ctx, object, resource)
+			// go kr.startWatch(ctx, object, resource)
+			go kr.startWatch(ctx, config, object,resource)
 		} else {
 			for _, ns := range object.Namespaces {
-				go kr.startWatch(ctx, object, resource.Namespace(ns))
+				// go kr.startWatch(ctx, object, resource.Namespace(ns))
+				go kr.startWatch(ctx, config, object, resource.Namespace(ns))
 			}
 		}
 	}
 }
 
-func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsConfig, resource dynamic.ResourceInterface) {
+// func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsConfig, resource dynamic.ResourceInterface) {
+func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsConfig, object *K8sObjectTarget, resource dynamic.ResourceInterface) {
 	stopperChan := make(chan struct{})
 	kr.mu.Lock()
 	kr.stopperChanList = append(kr.stopperChanList, stopperChan)
 	kr.mu.Unlock()
-	ticker := newTicker(ctx, config.Interval)
+	ticker := newTicker(ctx, config.Interval)  // config
 	listOption := metav1.ListOptions{
-		FieldSelector: config.FieldSelector,
+		FieldSelector: config.FieldSelector,  // config
 		LabelSelector: config.LabelSelector,
 	}
 
@@ -175,9 +216,11 @@ func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsC
 		case <-ticker.C:
 			objects, err := resource.List(ctx, listOption)
 			if err != nil {
-				kr.setting.Logger.Error("error in pulling object", zap.String("resource", config.gvr.String()), zap.Error(err))
+				// kr.setting.Logger.Error("error in pulling object", zap.String("resource", config.gvr.String()), zap.Error(err))
+				kr.setting.Logger.Error("error in pulling object", zap.String("resource", object.gvr.String()), zap.Error(err))
 			} else if len(objects.Items) > 0 {
-				logs := pullObjectsToLogData(objects, time.Now(), config)
+				logs := pullObjectsToLogData(objects, time.Now(), object)
+				// logs := pullObjectsToLogData(objects, time.Now(), config)
 				obsCtx := kr.obsrecv.StartLogsOp(ctx)
 				logRecordCount := logs.LogRecordCount()
 				err = kr.consumer.ConsumeLogs(obsCtx, logs)
@@ -188,8 +231,9 @@ func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsC
 		}
 	}
 }
-
-func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjectsConfig, resource dynamic.ResourceInterface) {
+// TODO: just needs a config, no target
+// func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjectsConfig, resource dynamic.ResourceInterface) {
+func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjectsConfig, object *K8sObjectTarget, resource dynamic.ResourceInterface) {
 	stopperChan := make(chan struct{})
 	kr.mu.Lock()
 	kr.stopperChanList = append(kr.stopperChanList, stopperChan)
@@ -206,12 +250,14 @@ func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjects
 	wait.UntilWithContext(cancelCtx, func(newCtx context.Context) {
 		resourceVersion, err := getResourceVersion(newCtx, &cfgCopy, resource)
 		if err != nil {
-			kr.setting.Logger.Error("could not retrieve a resourceVersion", zap.String("resource", cfgCopy.gvr.String()), zap.Error(err))
+			// kr.setting.Logger.Error("could not retrieve a resourceVersion", zap.String("resource", cfgCopy.gvr.String()), zap.Error(err))
+			kr.setting.Logger.Error("could not retrieve a resourceVersion", zap.String("resource", object.gvr.String()), zap.Error(err))
 			cancel()
 			return
 		}
 
-		done := kr.doWatch(newCtx, &cfgCopy, resourceVersion, watchFunc, stopperChan)
+		// done := kr.doWatch(newCtx, &cfgCopy, resourceVersion, watchFunc, stopperChan)
+		done := kr.doWatch(newCtx, object, resourceVersion, watchFunc, stopperChan)
 		if done {
 			cancel()
 			return
@@ -223,7 +269,7 @@ func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjects
 }
 
 // doWatch returns true when watching is done, false when watching should be restarted.
-func (kr *k8sobjectsreceiver) doWatch(ctx context.Context, config *K8sObjectsConfig, resourceVersion string, watchFunc func(options metav1.ListOptions) (apiWatch.Interface, error), stopperChan chan struct{}) bool {
+func (kr *k8sobjectsreceiver) doWatch(ctx context.Context, config *K8sObjectTarget, resourceVersion string, watchFunc func(options metav1.ListOptions) (apiWatch.Interface, error), stopperChan chan struct{}) bool {
 	watcher, err := watch.NewRetryWatcher(resourceVersion, &cache.ListWatch{WatchFunc: watchFunc})
 	if err != nil {
 		kr.setting.Logger.Error("error in watching object", zap.String("resource", config.gvr.String()), zap.Error(err))

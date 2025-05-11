@@ -41,7 +41,11 @@ type K8sObjectsConfig struct {
 	FieldSelector   string        `mapstructure:"field_selector"`
 	Interval        time.Duration `mapstructure:"interval"`
 	ResourceVersion string        `mapstructure:"resource_version"`
-	K8sObjectTarget `mapstructure:",squash"`
+	// K8sObjectTarget `mapstructure:",squash"`
+	Namespaces       []string             `mapstructure:"namespaces"`
+	ExcludeWatchType []apiWatch.EventType `mapstructure:"exclude_watch_type"`
+	exclude          map[apiWatch.EventType]bool
+	gvr              *schema.GroupVersionResource
 }
 
 type K8sObjectTarget struct {
@@ -55,14 +59,43 @@ type Config struct {
 	k8sconfig.APIConfig `mapstructure:",squash"`
 
 	Objects []*K8sObjectsConfig `mapstructure:"objects"`
+	Targets []*K8sObjectTarget `mapstructure:"objects"`
 
 	// For mocking purposes only.
 	makeDiscoveryClient func() (discovery.ServerResourcesInterface, error)
 	makeDynamicClient   func() (dynamic.Interface, error)
 }
 
+func newTargetObject(o *K8sObjectsConfig) *K8sObjectTarget {
+	targetObject := &K8sObjectTarget{}
+	targetObject.Namespaces = make([]string, len(o.Namespaces))
+	if o.Namespaces != nil {
+		copy(targetObject.Namespaces, o.Namespaces)
+	}
+
+	targetObject.ExcludeWatchType = make([]apiWatch.EventType, len(o.ExcludeWatchType))
+	if o.ExcludeWatchType != nil {
+		copy(targetObject.ExcludeWatchType, o.ExcludeWatchType)
+	}
+
+	targetObject.exclude = make(map[apiWatch.EventType]bool)
+	for key, val := range o.exclude {
+		targetObject.exclude[key] = val
+	}
+
+	if o.gvr != nil {
+		targetObject.gvr = &schema.GroupVersionResource{
+			Group:    o.gvr.Group,
+			Version:  o.gvr.Version,
+			Resource: o.gvr.Resource,
+		}
+	}
+	return targetObject
+}
+
 func (c *Config) Validate() error {
-	for _, object := range c.Objects {
+	// for _, object := range c.Objects {
+	for i, object := range c.Objects {
 		if object.Mode == "" {
 			object.Mode = defaultMode
 		} else if _, ok := modeMap[object.Mode]; !ok {
@@ -73,7 +106,8 @@ func (c *Config) Validate() error {
 			object.Interval = defaultPullInterval
 		}
 
-		if object.Mode == PullMode && len(object.ExcludeWatchType) != 0 {
+		// if object.Mode == PullMode && len(object.ExcludeWatchType) != 0 {
+		if object.Mode == PullMode && len(c.Targets[i].ExcludeWatchType) != 0 {
 			return errors.New("the Exclude config can only be used with watch mode")
 		}
 	}
@@ -134,39 +168,39 @@ func (c *Config) getValidObjects() (map[string][]*schema.GroupVersionResource, e
 	return validObjects, nil
 }
 
-func (k *K8sObjectsConfig) DeepCopy() *K8sObjectsConfig {
-	copied := &K8sObjectsConfig{
-		Name:            k.Name,
-		Group:           k.Group,
-		Mode:            k.Mode,
-		LabelSelector:   k.LabelSelector,
-		FieldSelector:   k.FieldSelector,
-		Interval:        k.Interval,
-		ResourceVersion: k.ResourceVersion,
-	}
+// func (k *K8sObjectsConfig) DeepCopy() *K8sObjectsConfig {
+// 	copied := &K8sObjectsConfig{
+// 		Name:            k.Name,
+// 		Group:           k.Group,
+// 		Mode:            k.Mode,
+// 		LabelSelector:   k.LabelSelector,
+// 		FieldSelector:   k.FieldSelector,
+// 		Interval:        k.Interval,
+// 		ResourceVersion: k.ResourceVersion,
+// 	}
 
-	copied.Namespaces = make([]string, len(k.Namespaces))
-	if k.Namespaces != nil {
-		copy(copied.Namespaces, k.Namespaces)
-	}
+// 	copied.Namespaces = make([]string, len(k.Namespaces))
+// 	if k.Namespaces != nil {
+// 		copy(copied.Namespaces, k.Namespaces)
+// 	}
 
-	copied.ExcludeWatchType = make([]apiWatch.EventType, len(k.ExcludeWatchType))
-	if k.ExcludeWatchType != nil {
-		copy(copied.ExcludeWatchType, k.ExcludeWatchType)
-	}
+// 	copied.ExcludeWatchType = make([]apiWatch.EventType, len(k.ExcludeWatchType))
+// 	if k.ExcludeWatchType != nil {
+// 		copy(copied.ExcludeWatchType, k.ExcludeWatchType)
+// 	}
 
-	copied.exclude = make(map[apiWatch.EventType]bool)
-	for key, val := range k.exclude {
-		copied.exclude[key] = val
-	}
+// 	copied.exclude = make(map[apiWatch.EventType]bool)
+// 	for key, val := range k.exclude {
+// 		copied.exclude[key] = val
+// 	}
 
-	if k.gvr != nil {
-		copied.gvr = &schema.GroupVersionResource{
-			Group:    k.gvr.Group,
-			Version:  k.gvr.Version,
-			Resource: k.gvr.Resource,
-		}
-	}
+// 	if k.gvr != nil {
+// 		copied.gvr = &schema.GroupVersionResource{
+// 			Group:    k.gvr.Group,
+// 			Version:  k.gvr.Version,
+// 			Resource: k.gvr.Resource,
+// 		}
+// 	}
 
-	return copied
-}
+// 	return copied
+// }

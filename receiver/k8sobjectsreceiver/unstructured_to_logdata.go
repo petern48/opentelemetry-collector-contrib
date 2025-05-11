@@ -16,7 +16,8 @@ import (
 
 type attrUpdaterFunc func(pcommon.Map)
 
-func watchObjectsToLogData(event *watch.Event, observedAt time.Time, config *K8sObjectsConfig) (plog.Logs, error) {
+// func watchObjectsToLogData(event *watch.Event, observedAt time.Time, config *K8sObjectsConfig) (plog.Logs, error) {
+func watchObjectsToLogData(event *watch.Event, observedAt time.Time, config *K8sObjectTarget) (plog.Logs, error) {
 	udata, ok := event.Object.(*unstructured.Unstructured)
 	if !ok {
 		return plog.Logs{}, fmt.Errorf("received data that wasnt unstructure, %v", event)
@@ -41,11 +42,13 @@ func watchObjectsToLogData(event *watch.Event, observedAt time.Time, config *K8s
 	}), nil
 }
 
-func pullObjectsToLogData(event *unstructured.UnstructuredList, observedAt time.Time, config *K8sObjectsConfig) plog.Logs {
+// func pullObjectsToLogData(event *unstructured.UnstructuredList, observedAt time.Time, config *K8sObjectsConfig) plog.Logs {
+func pullObjectsToLogData(event *unstructured.UnstructuredList, observedAt time.Time, config *K8sObjectTarget) plog.Logs {
 	return unstructuredListToLogData(event, observedAt, config)
 }
 
-func unstructuredListToLogData(event *unstructured.UnstructuredList, observedAt time.Time, config *K8sObjectsConfig, attrUpdaters ...attrUpdaterFunc) plog.Logs {
+func unstructuredListToLogData(event *unstructured.UnstructuredList, observedAt time.Time, config *K8sObjectTarget, attrUpdaters ...attrUpdaterFunc) plog.Logs {
+// func unstructuredListToLogData(event *unstructured.UnstructuredList, observedAt time.Time, config *K8sObjectsConfig, attrUpdaters ...attrUpdaterFunc) plog.Logs {
 	out := plog.NewLogs()
 	resourceLogs := out.ResourceLogs()
 	namespaceResourceMap := make(map[string]plog.LogRecordSlice)
