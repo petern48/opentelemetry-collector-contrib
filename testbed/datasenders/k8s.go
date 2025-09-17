@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"go.opentelemetry.io/collector/consumer"
@@ -47,15 +48,8 @@ var _ testbed.LogDataSender = (*FileLogK8sWriter)(nil)
 // |      type: regex_parser
 // |      regex: ^(?P<log>.*)$
 // |  `
-func NewFileLogK8sWriter(config string) *FileLogK8sWriter {
-	dir, err := os.MkdirTemp("", "namespace-*_test-pod_000011112222333344445555666677778888")
-	if err != nil {
-		panic("failed to create temp dir")
-	}
-	dir, err = os.MkdirTemp(dir, "*")
-	if err != nil {
-		panic("failed to create temp dir")
-	}
+func NewFileLogK8sWriter(t *testing.T, config string) *FileLogK8sWriter {
+	dir := t.TempDir()
 
 	file, err := os.CreateTemp(dir, "*.log")
 	if err != nil {
@@ -150,8 +144,8 @@ func (f *FileLogK8sWriter) GetEndpoint() net.Addr {
 
 // NewKubernetesContainerWriter returns FileLogK8sWriter with configuration
 // to recognize and parse kubernetes container logs
-func NewKubernetesContainerWriter() *FileLogK8sWriter {
-	return NewFileLogK8sWriter(`
+func NewKubernetesContainerWriter(t *testing.T) *FileLogK8sWriter {
+	return NewFileLogK8sWriter(t, `
   filelog:
     include: [ %s ]
     start_at: beginning
@@ -224,8 +218,8 @@ func NewKubernetesContainerWriter() *FileLogK8sWriter {
 
 // NewKubernetesContainerParserWriter returns FileLogK8sWriter with configuration
 // to recognize and parse kubernetes container logs using the container parser
-func NewKubernetesContainerParserWriter() *FileLogK8sWriter {
-	return NewFileLogK8sWriter(`
+func NewKubernetesContainerParserWriter(t *testing.T) *FileLogK8sWriter {
+	return NewFileLogK8sWriter(t, `
   filelog:
     include: [ %s ]
     start_at: beginning
@@ -239,8 +233,8 @@ func NewKubernetesContainerParserWriter() *FileLogK8sWriter {
 
 // NewKubernetesCRIContainerdWriter returns FileLogK8sWriter with configuration
 // to parse only CRI-Containerd kubernetes logs
-func NewKubernetesCRIContainerdWriter() *FileLogK8sWriter {
-	return NewFileLogK8sWriter(`
+func NewKubernetesCRIContainerdWriter(t *testing.T) *FileLogK8sWriter {
+	return NewFileLogK8sWriter(t, `
   filelog:
     include: [ %s ]
     start_at: beginning
@@ -287,8 +281,8 @@ func NewKubernetesCRIContainerdWriter() *FileLogK8sWriter {
 
 // NewKubernetesCRIContainerdNoAttributesOpsWriter returns FileLogK8sWriter with configuration
 // to parse only CRI-Containerd kubernetes logs without reformatting attributes
-func NewKubernetesCRIContainerdNoAttributesOpsWriter() *FileLogK8sWriter {
-	return NewFileLogK8sWriter(`
+func NewKubernetesCRIContainerdNoAttributesOpsWriter(t *testing.T) *FileLogK8sWriter {
+	return NewFileLogK8sWriter(t, `
   filelog:
     include: [ %s ]
     start_at: beginning
@@ -313,8 +307,8 @@ func NewKubernetesCRIContainerdNoAttributesOpsWriter() *FileLogK8sWriter {
 
 // NewCRIContainerdWriter returns FileLogK8sWriter with configuration
 // to parse only CRI-Containerd logs (no extracting metadata from filename)
-func NewCRIContainerdWriter() *FileLogK8sWriter {
-	return NewFileLogK8sWriter(`
+func NewCRIContainerdWriter(t *testing.T) *FileLogK8sWriter {
+	return NewFileLogK8sWriter(t, `
   filelog:
     include: [ %s ]
     start_at: beginning

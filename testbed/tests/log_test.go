@@ -71,7 +71,7 @@ func TestLog10kDPS(t *testing.T) {
 		},
 		{
 			name:     "kubernetes containers",
-			sender:   datasenders.NewKubernetesContainerWriter(),
+			sender:   datasenders.NewKubernetesContainerWriter(t),
 			receiver: testbed.NewOTLPDataReceiver(testutil.GetAvailablePort(t)),
 			resourceSpec: testbed.ResourceSpec{
 				ExpectedMaxCPU: 110,
@@ -80,7 +80,7 @@ func TestLog10kDPS(t *testing.T) {
 		},
 		{
 			name:     "kubernetes containers parser",
-			sender:   datasenders.NewKubernetesContainerParserWriter(),
+			sender:   datasenders.NewKubernetesContainerParserWriter(t),
 			receiver: testbed.NewOTLPDataReceiver(testutil.GetAvailablePort(t)),
 			resourceSpec: testbed.ResourceSpec{
 				ExpectedMaxCPU: 110,
@@ -89,7 +89,7 @@ func TestLog10kDPS(t *testing.T) {
 		},
 		{
 			name:     "k8s CRI-Containerd",
-			sender:   datasenders.NewKubernetesCRIContainerdWriter(),
+			sender:   datasenders.NewKubernetesCRIContainerdWriter(t),
 			receiver: testbed.NewOTLPDataReceiver(testutil.GetAvailablePort(t)),
 			resourceSpec: testbed.ResourceSpec{
 				ExpectedMaxCPU: 100,
@@ -98,7 +98,7 @@ func TestLog10kDPS(t *testing.T) {
 		},
 		{
 			name:     "k8s CRI-Containerd no attr ops",
-			sender:   datasenders.NewKubernetesCRIContainerdNoAttributesOpsWriter(),
+			sender:   datasenders.NewKubernetesCRIContainerdNoAttributesOpsWriter(t),
 			receiver: testbed.NewOTLPDataReceiver(testutil.GetAvailablePort(t)),
 			resourceSpec: testbed.ResourceSpec{
 				ExpectedMaxCPU: 100,
@@ -107,7 +107,7 @@ func TestLog10kDPS(t *testing.T) {
 		},
 		{
 			name:     "CRI-Containerd",
-			sender:   datasenders.NewCRIContainerdWriter(),
+			sender:   datasenders.NewCRIContainerdWriter(t),
 			receiver: testbed.NewOTLPDataReceiver(testutil.GetAvailablePort(t)),
 			resourceSpec: testbed.ResourceSpec{
 				ExpectedMaxCPU: 100,
